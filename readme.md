@@ -12,3 +12,6 @@
 
 
 -Xms1M -Xmx1M -XX:+HeapDumpOnOutOfMemoryError
+
+
+java_pid66250.hprof 堆转储文件
