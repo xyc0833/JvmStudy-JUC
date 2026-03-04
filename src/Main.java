@@ -1,10 +1,15 @@
-import java.util.ArrayList;
-import java.util.List;
+import java.lang.ref.SoftReference;
+import java.lang.ref.WeakReference;
 
 public class Main {
+    public static void main(String[] args) {
+        SoftReference<Object> softReference = new SoftReference<>(new Object());
+        WeakReference<Object> weakReference = new WeakReference<>(new Object());
 
-    public static void main(String[] args) throws InterruptedException {
-        System.out.println("123123");
-        System.out.println("123131233332");
+        //手动GC
+        System.gc();
+
+        System.out.println("软引用对象："+softReference.get());
+        System.out.println("弱引用对象："+weakReference.get());
     }
 }

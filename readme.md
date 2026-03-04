@@ -224,3 +224,13 @@ Java还有一个JNI机制，它的全称：Java Native Interface，即Java本地
 [0.402s][info   ][gc,heap,exit]   region size 2048K, 2 young (4096K), 0 survivors (0K)
 [0.402s][info   ][gc,heap,exit]  Metaspace       used 768K, committed 896K, reserved 1114112K
 [0.402s][info   ][gc,heap,exit]   class space    used 64K, committed 128K, reserved 1048576K
+
+
+## git 大文件 解决方案 
+
+git filter-repo --invert-paths --path-match java_pid66250.hprof --force 
+
+
+scavenge /ˈskævɪndʒ/
+本义：（动物）捡食腐肉；（人）捡垃圾、搜寻可用之物
+引申：清理废物、回收可用资源
