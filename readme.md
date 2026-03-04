@@ -194,3 +194,33 @@ public class FieldDemo {
 Java还有一个JNI机制，它的全称：Java Native Interface，即Java本地接口。
 它允许在Java虚拟机内运行的Java代码与其他编程语言（如C/C++和汇编语言）编写的程序和库进行交互
 （在Android开发中用得比较多）比如我们现在想要让C语言程序帮助我们的Java程序实现a+b的运算
+
+-XX:+PrintGCDetails 
+
+[0.004s][warning][gc] -XX:+PrintGCDetails is deprecated. Will use -Xlog:gc* instead.
+[0.016s][info   ][gc,init] CardTable entry size: 512
+[0.016s][info   ][gc     ] Using G1
+[0.019s][info   ][gc,init] Version: 21.0.10+7-LTS (release)
+[0.019s][info   ][gc,init] CPUs: 4 total, 4 available
+[0.019s][info   ][gc,init] Memory: 16384M
+[0.019s][info   ][gc,init] Large Page Support: Disabled
+[0.019s][info   ][gc,init] NUMA Support: Disabled
+[0.019s][info   ][gc,init] Compressed Oops: Enabled (Zero based)
+[0.019s][info   ][gc,init] Heap Region Size: 2M
+[0.019s][info   ][gc,init] Heap Min Capacity: 8M
+[0.019s][info   ][gc,init] Heap Initial Capacity: 256M
+[0.019s][info   ][gc,init] Heap Max Capacity: 4G
+[0.019s][info   ][gc,init] Pre-touch: Disabled
+[0.019s][info   ][gc,init] Parallel Workers: 4
+[0.019s][info   ][gc,init] Concurrent Workers: 1
+[0.019s][info   ][gc,init] Concurrent Refinement Workers: 4
+[0.019s][info   ][gc,init] Periodic GC: Disabled
+[0.033s][info   ][gc,metaspace] CDS archive(s) mapped at: [0x0000000195000000-0x0000000195cf7000-0x0000000195cf7000), size 13594624, SharedBaseAddress: 0x0000000195000000, ArchiveRelocationMode: 1.
+[0.033s][info   ][gc,metaspace] Compressed class space mapped at: 0x0000000196000000-0x00000001d6000000, reserved size: 1073741824
+[0.033s][info   ][gc,metaspace] Narrow klass base: 0x0000000195000000, Narrow klass shift: 0, Narrow klass range: 0x100000000
+123123
+[0.400s][info   ][gc,heap,exit] Heap
+[0.401s][info   ][gc,heap,exit]  garbage-first heap   total 264192K, used 3853K [0x0000000700000000, 0x0000000800000000)
+[0.402s][info   ][gc,heap,exit]   region size 2048K, 2 young (4096K), 0 survivors (0K)
+[0.402s][info   ][gc,heap,exit]  Metaspace       used 768K, committed 896K, reserved 1114112K
+[0.402s][info   ][gc,heap,exit]   class space    used 64K, committed 128K, reserved 1048576K
