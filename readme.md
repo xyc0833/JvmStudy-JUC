@@ -234,3 +234,243 @@ git filter-repo --invert-paths --path-match java_pid66250.hprof --force
 scavenge /ˈskævɪndʒ/
 本义：（动物）捡食腐肉；（人）捡垃圾、搜寻可用之物
 引申：清理废物、回收可用资源
+
+
+## Runnable
+
+```java
+public class Main {
+    private static int i = 0;
+    public static void main(String[] args) throws InterruptedException {
+        Lock testLock = new ReentrantLock();   //可重入锁ReentrantLock类是Lock类的一个实现，我们后面会进行介绍
+        Runnable action = () -> {
+            for (int j = 0; j < 100000; j++) {   //还是以自增操作为例
+                testLock.lock();    //加锁，加锁成功后其他线程如果也要获取锁，会阻塞，等待当前线程释放
+                i++;
+                testLock.unlock();  //解锁，释放锁之后其他线程就可以获取这把锁了（注意在这之前一定得加锁，不然报错）
+            }
+        };
+        new Thread(action).start();
+        new Thread(action).start();
+        Thread.sleep(1000);   //等上面两个线程跑完
+        System.out.println(i);
+    }
+}
+```
+你这段代码里的 `Runnable` 是 Java 中实现多线程的核心接口，这里用了 Lambda 表达式简化写法，我会从「是什么、怎么用、代码里的具体作用」三个层面帮你讲清楚，让你彻底理解这段代码中的 `Runnable` 逻辑。
+
+### 先总结核心作用
+代码中的 `Runnable` 本质是一个**任务载体**：它封装了“循环10万次对静态变量 `i` 进行加锁自增”的逻辑，两个线程会各自执行这个任务，最终实现多线程下的安全自增。
+
+---
+
+### 1. Runnable 接口的基础认知
+`Runnable` 是 `java.lang` 包下的核心函数式接口，专门用来定义**线程要执行的任务**，核心特点：
+- 接口中只有一个抽象方法：`void run()`（无返回值、不抛检查异常）；
+- 本身不是线程，只是“待执行的任务”，需要交给 `Thread` 来执行；
+- Java 8 后因为是函数式接口，可直接用 Lambda 表达式简化编写（代码里就是这种写法）。
+
+#### 传统写法 vs 代码中的 Lambda 写法（对比更易理解）
+你代码里用的是 Lambda 简化版，等价于下面的传统匿名内部类写法，能更直观看到 `Runnable` 的结构：
+```java
+// 传统匿名内部类写法（和代码中的Lambda完全等价）
+Runnable action = new Runnable() {
+    @Override
+    public void run() {
+        for (int j = 0; j < 100000; j++) {
+            testLock.lock();
+            i++;
+            testLock.unlock();
+        }
+    }
+};
+```
+代码中 `() -> { ... }` 就是 Lambda 对 `Runnable` 的简写：
+- `()`：对应 `run()` 方法的空参数列表；
+- `->`：Lambda 语法分隔符，左边是参数，右边是方法体；
+- `{ ... }`：就是 `run()` 方法的具体执行逻辑。
+
+### 2. 这段代码中 Runnable 的具体执行流程
+#### 第一步：定义任务
+```java
+Runnable action = () -> {
+    for (int j = 0; j < 100000; j++) {   
+        testLock.lock();    // 加锁，保证同一时间只有一个线程执行i++
+        i++;
+        testLock.unlock();  // 解锁，释放锁给其他线程
+    }
+};
+```
+- 这个 `action` 对象封装了“10万次加锁自增 `i`”的任务逻辑；
+- 核心目的：通过 `ReentrantLock` 的加锁/解锁，保证 `i++` 这个非原子操作在多线程下的线程安全。
+
+#### 第二步：将任务交给线程执行
+```java
+new Thread(action).start();
+new Thread(action).start();
+```
+- `new Thread(action)`：创建线程对象，把 `Runnable` 任务传给线程；
+- `start()`：启动线程——JVM 会调用该线程的 `run()` 方法（也就是 `Runnable` 里的逻辑）；
+- 这里创建了两个线程，**各自独立执行 `action` 里的 10万次循环**（不是共享循环次数，而是每个线程都跑10万次）。
+
+#### 第三步：线程执行的关键细节
+- 两个线程会并发执行，但因为 `testLock.lock()` 的存在，同一时间只有一个线程能进入 `i++` 的执行环节；
+- 最终 `i` 的结果理论上是 200000（10万+10万），如果不加锁，结果会小于200000（因为 `i++` 是“读取-修改-写入”三步操作，多线程会出现数据覆盖）。
+
+### 3. 关键注意点（避坑）
+1. **Runnable 不是线程**：`action` 只是任务，必须通过 `new Thread(action).start()` 才能启动线程执行；如果直接调用 `action.run()`，不会创建新线程，只是在当前主线程执行逻辑。
+2. **锁的作用域**：代码中锁包裹了 `i++`，刚好覆盖非原子操作，是正确的；如果锁加在循环外面（比如 `lock()` 在循环前，`unlock()` 在循环后），会导致一个线程独占锁跑完10万次，另一个线程才执行，失去并发意义。
+3. **异常处理**：`Runnable` 的 `run()` 不能抛检查异常（比如 `InterruptedException`），如果任务里有需要捕获的异常，必须在 Lambda 内部用 `try-catch` 处理（代码中 `i++` 无异常，所以没写）。
+
+### 总结
+1. 代码中的 `Runnable` 是一个**线程任务载体**，用 Lambda 简化写法封装了“10万次加锁自增 `i`”的逻辑；
+2. 两个线程分别执行这个 `Runnable` 任务，通过 `ReentrantLock` 保证 `i++` 的线程安全；
+3. `Runnable` 的核心价值是**解耦“任务逻辑”和“线程执行”**，让任务可以复用、线程只负责执行。
+
+简单记：`Runnable` 就是“线程要做的事”，你定义好“事”（Lambda 里的逻辑），交给 Thread 去“做”（start()），多线程就跑起来了。
+
+
+## 介绍一下 condition
+
+
+你想了解的 `Condition` 是 Java JUC 包中与显式锁（`Lock`）配合使用的**线程等待/通知机制**，可以理解为 `synchronized` 搭配 `wait()`/`notify()` 的“升级版”，我会从「是什么、怎么用、核心优势、实战例子」四个维度帮你讲清楚，结合你之前学的 `ReentrantLock` 更容易理解。
+
+### 先明确核心定义
+`Condition`（条件对象）是 `java.util.concurrent.locks` 包下的接口，必须通过 `Lock` 对象的 `newCondition()` 方法创建，核心作用是：**让线程在满足特定条件时等待，当条件满足时被唤醒**。
+
+简单类比：
+- `synchronized` + `wait()`/`notify()` = 老式的“单条件等待通知”；
+- `Lock` + `Condition` = 新式的“多条件精准等待通知”。
+
+### 1. Condition 核心方法（对比 wait/notify 更易理解）
+| Condition 方法       | 对应 Object 方法 | 作用说明                                                                 |
+|----------------------|------------------|--------------------------------------------------------------------------|
+| `await()`            | `wait()`         | 让当前线程等待，释放锁，直到被唤醒或中断                                 |
+| `await(long time, TimeUnit unit)` | `wait(long timeout)` | 限时等待，超时自动唤醒                                                   |
+| `signal()`           | `notify()`       | 唤醒一个等待在该 Condition 上的线程                                       |
+| `signalAll()`        | `notifyAll()`    | 唤醒所有等待在该 Condition 上的线程                                       |
+
+⚠️ 关键注意：
+和 `wait()`/`notify()` 一样，调用 `Condition` 的方法前，必须先获取对应的 `Lock` 锁（否则会抛 `IllegalMonitorStateException`）。
+
+### 2. Condition 的核心优势（对比 synchronized + wait/notify）
+这是 `Condition` 最核心的价值，也是为什么要引入它：
+#### 优势1：支持多条件精准唤醒（最核心）
+`synchronized` 只有一个“等待集”，`notify()` 只能随机唤醒一个线程，`notifyAll()` 会唤醒所有线程（无关线程也会被唤醒，造成“惊群效应”）；
+`Condition` 可以为一个 `Lock` 创建多个条件对象，实现“按需唤醒”——只有满足特定条件的线程才会被唤醒，避免无效竞争。
+
+#### 优势2：更灵活的等待机制
+- 支持限时等待（带时间单位，比 `wait(long)` 更直观）；
+- 支持可中断等待（`await()` 响应线程中断，抛出 `InterruptedException`）；
+- 还提供 `awaitUninterruptibly()`（不响应中断的等待）、`awaitUntil(Date deadline)`（截止时间等待）等高级方法。
+
+### 3. 实战例子（生产者-消费者模型，体现多条件优势）
+用 `ReentrantLock + Condition` 实现经典的生产者-消费者，对比 `synchronized` 能直观看到“精准唤醒”的价值：
+```java
+import java.util.LinkedList;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+// 生产者-消费者容器
+class Buffer {
+    private final LinkedList<String> queue = new LinkedList<>();
+    private final int MAX_CAPACITY = 5; // 队列最大容量
+    private final Lock lock = new ReentrantLock();
+    // 两个Condition：空条件（队列空时消费者等待）、满条件（队列满时生产者等待）
+    private final Condition emptyCondition = lock.newCondition();
+    private final Condition fullCondition = lock.newCondition();
+
+    // 生产方法
+    public void produce(String item) throws InterruptedException {
+        lock.lock(); // 先获取锁
+        try {
+            // 队列满时，生产者等待（直到队列有空位）
+            while (queue.size() == MAX_CAPACITY) {
+                fullCondition.await(); // 生产者在fullCondition上等待
+            }
+            queue.add(item);
+            System.out.println("生产：" + item + "，队列大小：" + queue.size());
+            emptyCondition.signal(); // 唤醒等待的消费者（只有消费者会在emptyCondition上等）
+        } finally {
+            lock.unlock(); // 必须在finally中解锁，避免异常导致锁无法释放
+        }
+    }
+
+    // 消费方法
+    public String consume() throws InterruptedException {
+        lock.lock();
+        try {
+            // 队列空时，消费者等待（直到有产品）
+            while (queue.size() == 0) {
+                emptyCondition.await(); // 消费者在emptyCondition上等待
+            }
+            String item = queue.removeFirst();
+            System.out.println("消费：" + item + "，队列大小：" + queue.size());
+            fullCondition.signal(); // 唤醒等待的生产者（只有生产者会在fullCondition上等）
+            return item;
+        } finally {
+            lock.unlock();
+        }
+    }
+}
+
+public class ConditionDemo {
+    public static void main(String[] args) {
+        Buffer buffer = new Buffer();
+
+        // 启动3个生产者线程
+        for (int i = 0; i < 3; i++) {
+            new Thread(() -> {
+                try {
+                    for (int j = 0; j < 2; j++) {
+                        buffer.produce("产品" + j);
+                        Thread.sleep(100);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }).start();
+        }
+
+        // 启动2个消费者线程
+        for (int i = 0; i < 2; i++) {
+            new Thread(() -> {
+                try {
+                    for (int j = 0; j < 3; j++) {
+                        buffer.consume();
+                        Thread.sleep(200);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }).start();
+        }
+    }
+}
+```
+
+#### 代码关键解读：
+1. 创建了两个 `Condition`：
+    - `emptyCondition`：队列空时，消费者在这个条件上等待；
+    - `fullCondition`：队列满时，生产者在这个条件上等待。
+2. 精准唤醒：
+    - 生产者生产后，只唤醒等待的消费者（`emptyCondition.signal()`），不会唤醒其他生产者；
+    - 消费者消费后，只唤醒等待的生产者（`fullCondition.signal()`），不会唤醒其他消费者。
+3. 安全保障：
+    - 用 `while` 循环检查条件（而非 `if`），避免“虚假唤醒”（线程被唤醒后需重新检查条件）；
+    - 解锁操作放在 `finally` 中，确保无论是否抛异常，锁都会释放。
+
+### 4. 核心注意事项
+1. **必须先加锁**：调用 `await()`/`signal()` 前，必须先获取 `Lock` 锁，否则抛 `IllegalMonitorStateException`；
+2. **避免虚假唤醒**：永远用 `while` 循环检查条件（`while (条件不满足) { await(); }`），而非 `if`；
+3. **解锁时机**：解锁操作必须放在 `finally` 块中，防止异常导致锁泄露；
+4. **和 Lock 绑定**：一个 `Condition` 只能和创建它的 `Lock` 配合使用，不能跨 Lock 使用。
+
+### 总结
+1. `Condition` 是 JUC 中与 `Lock` 配合的条件等待/通知接口，替代 `synchronized` 的 `wait()`/`notify()`；
+2. 核心优势是**多条件精准唤醒**，避免惊群效应，提升并发效率；
+3. 核心方法：`await()`（等待）、`signal()`（唤醒单个）、`signalAll()`（唤醒全部），使用前必须先获取锁；
+4. 典型场景：生产者-消费者、线程池任务等待等需要精准控制线程等待/唤醒的场景。
+
+简单记：`Condition` 就是给 `Lock` 锁配的“精准唤醒开关”，一个锁可以配多个开关，想唤醒哪类线程就开哪个开关。
