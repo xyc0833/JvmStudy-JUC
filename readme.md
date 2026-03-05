@@ -663,3 +663,90 @@ Java 里很多并发工具都是基于 CAS 实现的：
 
 简单记：CAS 就像改东西前先“验货”，货对了才改，货不对就重来，不用占着东西不让别人碰，效率更高。
 
+
+
+JUC提供了专用于并发场景下的容器，
+比如我们刚刚使用的ArrayList，在多线程环境下是没办法使用的，我们可以将其替换为JUC提供的多线程专用集合类
+
+
+## CopyOnWriteArrayList
+
+你想了解 Java 中的 `CopyOnWriteArrayList`，这是一个非常实用的并发集合类，我会从基础概念、工作原理、使用场景和注意事项等方面为你详细讲解。
+
+### 一、什么是 CopyOnWriteArrayList
+`CopyOnWriteArrayList` 是 Java `java.util.concurrent` 包下的一个线程安全的 List 实现，核心思想是 **“写时复制”（Copy On Write，COW）**：
+- 读操作：直接访问原数组，无需加锁，效率极高；
+- 写操作（添加、修改、删除）：先复制一份新数组，在新数组上完成修改，再将原数组引用指向新数组，全程加锁保证线程安全。
+
+它解决了普通 ArrayList 线程不安全、Vector 读写均加锁导致效率低的问题，是**读多写少**场景下的最优选择。
+
+### 二、核心工作原理
+#### 1. 底层结构
+`CopyOnWriteArrayList` 底层维护一个 `volatile` 修饰的数组（保证数组引用的可见性），写操作时的核心步骤：
+1. 加锁（ReentrantLock），防止多线程同时写；
+2. 复制原数组到新数组（新数组长度根据操作调整，比如添加元素时长度+1）；
+3. 在新数组上执行写操作（添加/修改/删除）；
+4. 将原数组引用替换为新数组；
+5. 解锁。
+
+#### 2. 核心方法示例（添加元素）
+```java
+import java.util.concurrent.CopyOnWriteArrayList;
+
+public class CopyOnWriteArrayListDemo {
+    public static void main(String[] args) {
+        // 创建 CopyOnWriteArrayList 实例
+        CopyOnWriteArrayList<String> list = new CopyOnWriteArrayList<>();
+
+        // 写操作：添加元素（底层会触发数组复制）
+        list.add("Java");
+        list.add("Python");
+        list.add("Go");
+
+        // 读操作：直接访问原数组，无锁
+        System.out.println("遍历结果：");
+        for (String s : list) {
+            System.out.println(s);
+        }
+
+        // 写操作：修改元素（同样触发数组复制）
+        list.set(1, "JavaScript");
+        System.out.println("\n修改后结果：" + list.get(1)); // 输出：JavaScript
+
+        // 写操作：删除元素（触发数组复制）
+        list.remove(2);
+        System.out.println("\n删除后长度：" + list.size()); // 输出：2
+    }
+}
+```
+
+#### 3. 关键特性解释
+- **线程安全**：写操作加锁，读操作无锁，多线程读不会阻塞，读和写也不会互相阻塞（但写操作之间会阻塞）；
+- **弱一致性**：迭代器遍历的是“写操作前的原数组副本”，不会抛出 `ConcurrentModificationException`（并发修改异常），但可能读取到旧数据；
+- **内存开销**：写操作会复制整个数组，数据量大时会占用大量内存，频繁写会导致性能下降。
+
+### 三、适用场景 & 不适用场景
+#### ✅ 适用场景
+- 读操作远多于写操作（如配置缓存、日志收集、黑名单列表）；
+- 对数据一致性要求不高（允许读取到旧数据）；
+- 不需要实时更新数据的场景。
+
+#### ❌ 不适用场景
+- 写操作频繁（如高频添加/修改/删除的业务列表）；
+- 对数据实时性要求高（如秒杀库存、金融交易数据）；
+- 数据量极大（复制数组会导致 OOM 或严重性能问题）。
+
+### 四、与 ArrayList/Vector 的对比
+| 特性                | ArrayList       | Vector          | CopyOnWriteArrayList |
+|---------------------|-----------------|-----------------|----------------------|
+| 线程安全            | ❌ 不安全       | ✅ 安全（同步锁）| ✅ 安全（写时复制）  |
+| 读操作性能          | 高（无锁）      | 低（同步锁）    | 高（无锁）           |
+| 写操作性能          | 高（无锁）      | 低（同步锁）    | 低（复制数组+加锁）  |
+| 并发修改异常        | ✅ 可能抛出     | ✅ 可能抛出     | ❌ 不会抛出          |
+| 内存开销            | 低              | 低              | 高（写时复制）       |
+
+### 总结
+1. `CopyOnWriteArrayList` 核心是**写时复制**，读无锁、写加锁+复制数组，保证线程安全且读性能极高；
+2. 适合**读多写少、允许弱一致性**的场景，不适合写频繁或数据量大的场景；
+3. 相比 Vector，它解决了“读操作也加锁”的性能问题，相比 ArrayList，解决了线程不安全的问题，但代价是写性能和内存开销。
+

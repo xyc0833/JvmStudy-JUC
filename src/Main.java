@@ -1,9 +1,23 @@
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 
 public class Main {
-    public static void main(String[] args) {
-        AtomicInteger integer = new AtomicInteger(1);
-        System.out.println(integer.compareAndSet(1,2));
-        System.out.println(integer.compareAndSet(3,2));
+    public static void main(String[] args) throws InterruptedException {
+        //线程安全的并发容器
+        List<String> list = new CopyOnWriteArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            int finalI = i;
+            new Thread(() -> {
+                for (int j = 0; j < 100; j++)
+                    list.add("lbwnb");
+            }).start();
+        }
+        TimeUnit.SECONDS.sleep(2);
+        System.out.println(list.size());
+        System.out.println(list.toString());
     }
 }
