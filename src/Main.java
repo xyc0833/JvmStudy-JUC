@@ -1,31 +1,40 @@
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.RecursiveTask;
 
 public class Main {
     public static void main(String[] args) throws InterruptedException, ExecutionException {
-        //创建一个初始值为5的循环屏障
-        CyclicBarrier barrier = new CyclicBarrier(5);
-        for (int i = 0; i < 5; i++) {   //创建5个线程
-            int finalI = i;
-            new Thread(() -> {
-                try {
-                    Thread.sleep((long) (2000 * new Random().nextDouble()));
-                    System.out.println("玩家 "+ finalI +" 进入房间进行等待... ("+barrier.getNumberWaiting()+"/5)");
+        ForkJoinPool pool = new ForkJoinPool();
+        System.out.println(pool.submit(new SubTask(1, 1000)).get());
+    }
 
-                    barrier.await();    //调用await方法进行等待，直到等待线程到达5才会一起继续执行
 
-                    //人数到齐之后，可以开始游戏了
-                    System.out.println("玩家 "+ finalI +" 进入游戏！");
-                } catch (InterruptedException | BrokenBarrierException e) {
-                    e.printStackTrace();
+    //继承RecursiveTask，这样才可以作为一个任务，泛型就是计算结果类型
+    private static class SubTask extends RecursiveTask<Integer> {
+        private final int start;   //比如我们要计算一个范围内所有数的和，那么就需要限定一下范围，这里用了两个int存放
+        private final int end;
+
+        public SubTask(int start, int end) {
+            this.start = start;
+            this.end = end;
+        }
+
+        @Override
+        protected Integer compute() {
+            if(end - start > 125) {    //每个任务最多计算125个数的和，如果大于继续拆分，小于就可以开始算了
+                SubTask subTask1 = new SubTask(start, (end + start) / 2);
+                subTask1.fork();    //会继续划分子任务执行
+                SubTask subTask2 = new SubTask((end + start) / 2 + 1, end);
+                subTask2.fork();   //会继续划分子任务执行
+                return subTask1.join() + subTask2.join();   //越玩越有递归那味了
+            } else {
+                System.out.println(Thread.currentThread().getName()+" 开始计算 "+start+"-"+end+" 的值!");
+                int res = 0;
+                for (int i = start; i <= end; i++) {
+                    res += i;
                 }
-            }).start();
-            //Thread.sleep(500);   //等一下上面的线程开始运行
-            //System.out.println("当前屏障前的等待线程数："+barrier.getNumberWaiting());
-
-            //barrier.reset();
-            //System.out.println("重置后屏障前的等待线程数："+barrier.getNumberWaiting());
+                return res;   //返回的结果会作为join的结果
+            }
         }
     }
 }
